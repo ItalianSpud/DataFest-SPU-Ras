@@ -1,13 +1,16 @@
 library(tidyverse)
 library(readxl)
 
-departments <- read_csv("departments.csv")
-diagnosis <- read_csv("diagnosis.csv")
-encounters <- read_csv("encounters.csv")
-patients <- read_csv("patients.csv")
-providers <- read_csv("providers.csv")
-social <- read_csv("social_determinants.csv")
-tiger <- read_csv("tigercensuscodes.csv")
+departments <- read_csv("Data/departments.csv")
+diagnosis <- read_csv("Data/diagnosis.csv")
+encounters <- read_csv("Data/encounters.csv")
+patients <- read_csv("Data/patients.csv")
+providers <- read_csv("Data/providers.csv")
+social <- read_csv("Data/social_determinants.csv")
+tiger <- read_csv("Data/tigercensuscodes.csv")
+
+social <- social |>
+  filter(DisplayName != "*Unspecified")
 
 plot1 <- diagnosis |>
   mutate(DiagnosisValue = sub("[0-9].*", "", x = DiagnosisValue)) |>
@@ -29,8 +32,10 @@ encounters |>
   geom_bar(aes(x = VisitTypeDescription))
 
 
-what <- plot1 |>
-  left_join(encounters, by = c("DiagnosisKey" = "PrimaryDiagnosisKey"), relationship = "many-to-many")
+what <- encounters |>
+  inner_join(patients, by = c("PatientDurableKey" = "DurableKey")) |>
+  arrange(PatientDurableKey) |>
+  filter(Type != "Patient Outreach")
 
 
 funny <- patients |>
@@ -47,5 +52,58 @@ patients |>
   ggplot() +
   geom_bar(aes(x = as.factor(PatientBirthYearBin)))
 
+encounters |>
+  group_by(PatientDurableKey) |>
+  summarize()
+
+patients |>
+  group_by(DurableKey) |>
+  summarize()
+
+max(encounters$PatientDurableKey)
+max(patients$DurableKey)
 
 
+what2 <- what |>
+  left_join(providers, by = c("AttendingProviderDurableKey" = "DurableKey")) |>
+  filter(ClinicianTitle != "*Unspecified")
+
+
+what <- what |>
+  filter(Type != "Patient Outreach")
+
+
+
+
+
+yess2 <- yess |>
+  filter(Domain == "physical activity")  |>
+  
+
+yess2 |>
+  ggplot() +
+  geom_bar(aes(x = AnswerText, fill = DisplayName))
+
+
+social_fit <- social |>
+  filter(Domain == "physical activity") |>
+  filter(DisplayName != "On average, how many minutes do you engage in exercise at this level?") |>
+  filter(AnswerText != "Patient declined") |>
+  filter(AnswerText != "Patient unable to answer") |>
+  mutate(Exercise = as.numeric(sub("[^0-9].*", "", x = AnswerText, useBytes = FALSE))) |>
+  select(Exercise, EncounterKey)
+
+
+encounters_fit <- encounters |>
+  arrange(PatientDurableKey) |>
+  group_by(PatientDurableKey) |>
+  mutate(Encounter = row_number(), num_encounter = n()) |>
+  left_join(social_fit, by = c("EncounterKey" = "EncounterKey"))
+
+encounters_fit <- yess |>
+  filter(num_encounter < 1000)
+
+lm <- lm(num_encounter ~ Exercise, encounters_fit)
+summary(lm)
+plot(num_encounter ~ Exercise, encounters_fit) 
+abline(lm)
